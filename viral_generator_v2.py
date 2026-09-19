@@ -35,51 +35,45 @@ with st.container():
     col1, col2 = st.columns(2)
     with col1:
         kategori = st.selectbox("Filter Kategori", [
-            "🎲 Acak Semua Kategori", "🐻 Dongeng Anak Animasi 3D", 
-            "🌍 Fakta Dunia", "🐒 Hewan Unik", "🍔 Makanan Unik", 
-            "🔬 Sains Menarik", "🤯 Fakta yang Mematahkan Logika"
+            "🎲 Acak Semua Kategori", 
+            "🗿 Sejarah Unik", 
+            "🌍 Fakta Dunia", 
+            "🐒 Hewan Unik", 
+            "🍔 Makanan Unik", 
+            "🔬 Sains Menarik", 
+            "🤯 Fakta yang Mematahkan Logika"
         ])
     with col2:
         jumlah_topik = st.selectbox("Jumlah Topik", [6, 9, 12, 15])
 
-    spesifik = st.text_input("Topik Spesifik (Opsional)", placeholder="Contoh: Seli si siput dan Boni beruang madu...")
+    spesifik = st.text_input("Topik Spesifik (Opsional)", placeholder="Contoh: Misteri peradaban kuno, rahasia sejarah...")
     submit_button = st.button("✨ Generate Topic", use_container_width=True)
 
-# 5. LOGIKA GENERATE IDE (DENGAN AUTO-DETECT MODEL)
+# 5. LOGIKA GENERATE IDE (MENGGUNAKAN MODEL GEMINI-3.6-FLASH TERBARU)
 if submit_button:
     if not api_key:
         st.error("Silakan masukkan API Key di menu samping kiri terlebih dahulu.")
     else:
-        with st.spinner("Mendeteksi model AI yang tersedia & merangkai ide..."):
+        with st.spinner("Merangkai ide konten viral terbaik..."):
             try:
-                # AUTO-DETECT: Mencari model yang diizinkan oleh Google untuk akun Anda
-                valid_model = None
-                for m in genai.list_models():
-                    if 'generateContent' in m.supported_generation_methods:
-                        valid_model = m.name
-                        break
+                # Menggunakan model versi 3.6-flash sesuai rekomendasi sistem Google
+                model = genai.GenerativeModel('gemini-3.6-flash')
                 
-                if not valid_model:
-                    st.error("API Key Anda valid, tetapi belum diberikan akses ke model teks oleh Google.")
-                else:
-                    # Menggunakan model yang berhasil ditemukan
-                    model = genai.GenerativeModel(valid_model)
-                    
-                    prompt_ide = f"""
-                    Buatkan {jumlah_topik} ide konten untuk kategori: {kategori}. Fokus: {spesifik}.
-                    Format output HARUS JSON Array murni:
-                    [
-                        {{
-                            "topik": "Judul Ide",
-                            "skor_viral": "9.5/10",
-                            "poin_menarik": ["Poin visual menarik 1", "Poin emosi 2", "Poin fakta unik 3"]
-                        }}
-                    ]
-                    """
-                    response = model.generate_content(prompt_ide)
-                    cleaned = response.text.replace("```json", "").replace("```", "").strip()
-                    st.session_state.ide_list = json.loads(cleaned)
-                    
+                prompt_ide = f"""
+                Buatkan {jumlah_topik} ide konten video short yang sangat menarik dan berpotensi viral untuk kategori: {kategori}. Fokus spesifik: {spesifik}.
+                Format output HARUS JSON Array murni tanpa teks lain:
+                [
+                    {{
+                        "topik": "Judul Ide yang Memancing Rasa Penasaran",
+                        "skor_viral": "9.5/10",
+                        "poin_menarik": ["Poin visual menarik 1", "Poin emosi/hook 2", "Poin fakta unik 3"]
+                    }}
+                ]
+                """
+                response = model.generate_content(prompt_ide)
+                cleaned = response.text.replace("```json", "").replace("```", "").strip()
+                st.session_state.ide_list = json.loads(cleaned)
+                
             except Exception as e:
                 st.error(f"Gagal menghasilkan ide. Error: {e}")
 
