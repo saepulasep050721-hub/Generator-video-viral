@@ -85,9 +85,9 @@ if st.session_state.ide_list:
                 st.markdown(f"##### \"{ide['topik']}\"")
                 for p in ide['poin_menarik']:
                     st.caption(f"✓ {p}")
-                if st.button( f"Pilih Topik Ini", key=f"select_{idx}", use_container_width=True):
+                if st.button(f"Pilih Topik Ini", key=f"select_{idx}", use_container_width=True):
                     st.session_state.selected_topic = ide['topik']
-                    st.success( dipilih: {ide['topik']})
+                    st.success(f"Dipilih: {ide['topik']}")
 
 # 6. STEP 2: GENERATE SCRIPT
 if st.session_state.selected_topic:
@@ -96,8 +96,9 @@ if st.session_state.selected_topic:
     st.info(f"Topik Terpilih: **{st.session_state.selected_topic}**")
     
     if st.button("✨ Generate Script Naskah", use_container_width=True):
-        with genai.GenerativeModel('gemini-3.6-flash') as model:
-            res_script = model.generate_content(f"Buatkan naskah video short (maks 60 detik) yang sangat engaging untuk topik: '{st.session_state.selected_topic}'. Sertakan Visual Cue dan Audio Cue.")
+        with st.spinner("Menulis naskah video short..."):
+            model = genai.GenerativeModel('gemini-3.6-flash')
+            res_script = model.generate_content(f"Buatkan naskah video short (maks 60 detik) yang sangat engaging untuk topik: '{st.session_state.selected_topic}'. Sertakan panduan visual dan audio.")
             st.session_state.script_result = res_script.text
             
     if st.session_state.script_result:
