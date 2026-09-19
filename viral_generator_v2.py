@@ -2,118 +2,136 @@ import streamlit as st
 import google.generativeai as genai
 import json
 
-# Setup halaman Streamlit
-st.set_page_config(page_title="Viral Video Generator", page_icon="🚀", layout="wide")
-st.title("🚀 Web Generator Ide & Script Video Viral")
-st.markdown("Alat AI untuk kreator: Cari Ide, Prediksi Skor Viral, dan Buat Naskah (Shorts/TikTok/Reels).")
+# 1. Konfigurasi Halaman Dasar (Ubah ke WIDE agar muat 3 kolom)
+st.set_page_config(page_title="Shorts Engine", page_icon="🌌", layout="wide")
 
-# Session State untuk menyimpan data agar tidak hilang saat tombol ditekan
+# Session State untuk menyimpan hasil ide agar tidak hilang saat tombol diklik
 if "ide_list" not in st.session_state:
     st.session_state.ide_list = []
 
-# Sidebar untuk API Key
-st.sidebar.header("Pengaturan")
-api_key = st.sidebar.text_input("Masukkan Gemini API Key:", type="password")
+# 2. INJEKSI CSS UNTUK TAMPILAN KARTU
+st.markdown("""
+    <style>
+    .stApp { background-color: #f8fafc; }
+    
+    /* Desain form atas */
+    .form-container {
+        background-color: #ffffff;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        margin-bottom: 2rem;
+    }
+    
+    /* Tombol utama */
+    div.stButton > button {
+        background-color: #3b82f6;
+        color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+    }
+    div.stButton > button:hover {
+        background-color: #2563eb;
+        color: white;
+    }
+    
+    /* Tombol sekunder (Buat Script) */
+    .btn-script button {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+    .btn-script button:hover {
+        background-color: #e2e8f0 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# 3. HEADER
+st.markdown("### 🌌 Shorts Engine")
+st.caption("AI VIRAL FACTS GENERATOR")
+st.divider()
+
+api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password")
 if api_key:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    st.sidebar.warning("Silakan masukkan API Key Gemini Anda di sini untuk mulai.")
 
-# Form Input Pengguna
+# 4. FORMULIR INPUT
 with st.container():
-    st.subheader("1. Cari Ide Konten")
-    with st.form("input_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            kategori = st.selectbox("Kategori Konten:", 
-                                    ["Dongeng Anak Animasi 3D", "Fakta Dunia", "Hewan Unik", "Sains & Teknologi", "Lainnya"])
-            kategori_lainnya = st.text_input("Sebutkan jika 'Lainnya':") if kategori == "Lainnya" else ""
-                
-        with col2:
-            jumlah_topik = st.slider("Jumlah Ide:", min_value=1, max_value=10, value=3)
-            
-        spesifikasi = st.text_area("Spesifikasi/Karakter (Opsional):", 
-                                   placeholder="Contoh: Fokus pada karakter Boni (anak beruang madu).")
-        
-        submit_button = st.form_submit_button("Generate Ide & Skor Viral ✨")
+    st.markdown("#### ⚙️ STEP 1: Konfigurasi Topik")
+    col1, col2 = st.columns(2)
+    with col1:
+        kategori = st.selectbox("Filter Kategori", [
+            "🎲 Acak Semua Kategori", "🐻 Dongeng Anak Animasi 3D", 
+            "🌍 Fakta Dunia", "🐒 Hewan Unik", "🍔 Makanan Unik", 
+            "🔬 Sains Menarik", "🤯 Fakta yang Mematahkan Logika"
+        ])
+    with col2:
+        jumlah_topik = st.selectbox("Jumlah Topik", [6, 9, 12, 15]) # Kelipatan 3 agar pas di grid
 
-# Logika Generate Ide
-if submit_button and api_key:
-    kategori_final = kategori_lainnya if kategori == "Lainnya" else kategori
-    
-    prompt_ide = f"""
-    Anda adalah analis tren TikTok dan YouTube Shorts. Buatkan {jumlah_topik} ide konten untuk kategori: {kategori_final}.
-    Spesifikasi: {spesifikasi}.
-    Format output HARUS JSON Array murni, contoh:
-    [
-        {{
-            "topik": "Judul Ide",
-            "skor_viral": 95,
-            "alasan_menarik": "Alasan kenapa viral"
-        }}
-    ]
-    Jangan gunakan awalan/akhiran markdown ```json.
-    """
-    
-    with st.spinner("Mencari ide viral terbaik..."):
-        try:
-            response = model.generate_content(prompt_ide)
-            cleaned = response.text.replace("```json", "").replace("```", "").strip()
-            st.session_state.ide_list = json.loads(cleaned)
-            st.success("Ide berhasil dibuat!")
-        except Exception as e:
-            st.error(f"Gagal menghasilkan ide. Coba lagi. Error: {e}")
+    spesifik = st.text_input("Topik Spesifik (Opsional)", placeholder="Contoh: Seli si siput dan Boni beruang madu...")
+    submit_button = st.button("✨ Generate Topic", use_container_width=True)
 
-# Menampilkan Hasil Ide dan Tombol Generate Script
-st.divider()
+# 5. LOGIKA GENERATE IDE
+if submit_button:
+    if not api_key:
+        st.error("Silakan masukkan API Key di menu samping kiri terlebih dahulu.")
+    else:
+        prompt_ide = f"""
+        Buatkan {jumlah_topik} ide konten untuk kategori: {kategori}. Fokus: {spesifik}.
+        Format output HARUS JSON Array murni:
+        [
+            {{
+                "topik": "Judul Ide",
+                "skor_viral": "9.5/10",
+                "poin_menarik": ["Poin visual menarik 1", "Poin emosi 2", "Poin fakta unik 3"]
+            }}
+        ]
+        """
+        with st.spinner("Mencari ide viral terbaik..."):
+            try:
+                response = model.generate_content(prompt_ide)
+                cleaned = response.text.replace("```json", "").replace("```", "").strip()
+                st.session_state.ide_list = json.loads(cleaned)
+            except Exception as e:
+                st.error(f"Gagal menghasilkan ide. Error: {e}")
+
+# 6. MENAMPILKAN HASIL DENGAN GRID (KARTU)
 if st.session_state.ide_list:
-    st.subheader("2. Hasil Ide & Generator Naskah")
+    st.markdown("<br>#### 🚀 Hasil Ide Konten", unsafe_allow_html=True)
+    
+    # Membuat 3 kolom
+    cols = st.columns(3)
     
     for idx, ide in enumerate(st.session_state.ide_list):
-        with st.expander(f"🔥 {ide['topik']} (Skor: {ide['skor_viral']}/100)"):
-            st.progress(ide['skor_viral'] / 100)
-            st.write(f"**Alasan:** {ide['alasan_menarik']}")
-            
-            # Tombol untuk generate naskah
-            if st.button(f"✍️ Buat Script & SEO untuk: {ide['topik']}", key=f"btn_script_{idx}"):
-                if api_key:
-                    prompt_script = f"""
-                    Buatkan naskah video vertikal (Shorts/TikTok) durasi 30-60 detik untuk topik: "{ide['topik']}".
-                    
-                    Tolong berikan output dalam format JSON murni dengan struktur:
-                    {{
-                        "hook": "Kalimat pertama yang sangat menarik perhatian (3 detik pertama)",
-                        "isi_naskah": "Isi cerita/fakta, gunakan bahasa santai dan menarik",
-                        "call_to_action": "Ajakan like/subscribe di akhir video",
-                        "keyword_pencarian_footage": ["keyword inggris 1", "keyword mandarin 1 (untuk douyin)", "keyword inggris 2"],
-                        "judul_seo": "Judul YouTube Shorts yang clickbait tapi aman",
-                        "hashtag": "#tag1 #tag2 #tag3"
-                    }}
-                    Jangan gunakan awalan/akhiran markdown ```json.
-                    """
-                    
-                    with st.spinner("Menulis naskah dan meracik SEO..."):
-                        try:
-                            res_script = model.generate_content(prompt_script)
-                            cln_script = res_script.text.replace("```json", "").replace("```", "").strip()
-                            script_data = json.loads(cln_script)
-                            
-                            st.success("Script berhasil dibuat!")
-                            st.markdown("### 📜 Naskah Video")
-                            st.info(f"**[HOOK 3 DETIK]**\n{script_data['hook']}")
-                            st.write(f"**[ISI NASKAH]**\n{script_data['isi_naskah']}")
-                            st.warning(f"**[CTA]**\n{script_data['call_to_action']}")
-                            
-                            st.markdown("### 🔍 Bahan & SEO")
-                            st.write("**Kata Kunci Cari Footage (Inggris & Mandarin):**")
-                            st.code(", ".join(script_data['keyword_pencarian_footage']))
-                            st.write("**Judul Video (SEO):**")
-                            st.code(script_data['judul_seo'])
-                            st.write("**Hashtag:**")
-                            st.code(script_data['hashtag'])
-                            
-                        except Exception as e:
-                            st.error(f"Gagal membuat naskah: {e}")
-                else:
-                    st.warning("API Key belum dimasukkan.")
+        # Menempatkan kartu secara bergantian di kolom 1, 2, dan 3
+        with cols[idx % 3]:
+            # Membuat wadah (kartu) dengan garis tepi
+            with st.container(border=True):
+                # Baris atas: Topik ke-berapa & Skor
+                st.markdown(
+                    f"<div style='display: flex; justify-content: space-between; font-size: 12px; color: #64748b; margin-bottom: 10px; font-weight: bold;'>"
+                    f"<span>TOPIK #{idx+1}</span>"
+                    f"<span style='color: #f97316;'>🔥 {ide['skor_viral']}</span>"
+                    f"</div>", 
+                    unsafe_allow_html=True
+                )
+                
+                # Judul
+                st.markdown(f"##### \"{ide['topik']}\"")
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Alasan Menarik (Poin-poin)
+                st.caption("KENAPA MENARIK:")
+                for poin in ide['poin_menarik']:
+                    st.markdown(f"<div style='font-size: 13px; color: #475569; margin-bottom: 5px;'>✓ {poin}</div>", unsafe_allow_html=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Tombol Buat Script (dengan style khusus agar tidak biru semua)
+                st.markdown('<div class="btn-script">', unsafe_allow_html=True)
+                if st.button("📄 Buat Script Topik Ini", key=f"btn_{idx}", use_container_width=True):
+                    st.success(f"Fitur pembuat script untuk '{ide['topik']}' sedang disiapkan!")
+                st.markdown('</div>', unsafe_allow_html=True)
