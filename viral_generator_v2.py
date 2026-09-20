@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import subprocess
 import os
-import tempfile
+import time
 
 # 1. Konfigurasi Halaman Dasar
 st.set_page_config(page_title="Noah Padlan Subtitle Burner", page_icon="✍️", layout="wide")
@@ -22,30 +22,26 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("### ✍️ Noah Padlan Subtitle Burner")
-st.caption("Ekstrak Suara Menjadi Teks Otomatis (Voice-to-Text) & Bakar Subtitle Permanen ke Dalam Video")
+st.markdown("### ✍️ Noah Padlan Subtitle Burner Pro (Real Audio AI)")
+st.caption("Mendengarkan Suara Asli Video Menggunakan Gemini File API & Kustomisasi Subtitle Permanen")
 st.divider()
 
 api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password")
 if api_key:
     genai.configure(api_key=api_key)
 
-# 3. FUNGSI MEMBUAT SRT & MEMBAKAR SUBTITLE DENGAN FFMPEG
-def burn_subtitles_to_video(input_path, transcript_content, output_path):
-    # Buat file .srt sementara dari teks transkrip
+# 3. FUNGSI PEMBAKARAN SUBTITLE DENGAN KUSTOMISASI GAYA FFMPEG
+def burn_subtitles_to_video(input_path, transcript_content, output_path, font_name, font_size, color_code, alignment_val):
     srt_path = "temp_subs.srt"
     
-    # Format sederhana file SRT dari teks transkrip pengguna
-    # Membagi teks per kalimat atau paragraf agar tampil rapi sebagai subtitle
     sentences = [s.strip() for s in transcript_content.split('.') if s.strip()]
     
     with open(srt_path, "w", encoding="utf-8") as f:
         start_sec = 0
-        duration_per_sentence = 4.0 # Estimasi durasi per kalimat
+        duration_per_sentence = 4.0 
         for i, sentence in enumerate(sentences):
             end_sec = start_sec + duration_per_sentence
             
-            # Konversi detik ke format SRT (00:00:00,000)
             def format_time(sec):
                 hrs = int(sec // 3600)
                 mins = int((sec % 3600) // 60)
@@ -58,9 +54,17 @@ def burn_subtitles_to_video(input_path, transcript_content, output_path):
             f.write(f"{sentence}.\n\n")
             start_sec = end_sec
 
-    # Perintah FFmpeg untuk membakar subtitle (.srt) ke dalam video
-    # Menggunakan styling subtitle agar terlihat jelas di tengah bawah video
-    vf_arg = f"subtitles={srt_path}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&H00FFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Alignment=2'"
+    force_style = (
+        f"FontName={font_name},"
+        f"FontSize={font_size},"
+        f"PrimaryColour={color_code},"
+        f"OutlineColour=&H000000&,"
+        f"BorderStyle=1,"
+        f"Outline=2,"
+        f"Alignment={alignment_val}"
+    )
+    
+    vf_arg = f"subtitles={srt_path}:force_style='{force_style}'"
     
     command = [
         'ffmpeg', '-y',
@@ -75,9 +79,9 @@ def burn_subtitles_to_video(input_path, transcript_content, output_path):
         os.remove(srt_path)
     return result.returncode == 0
 
-# 4. PANEL UPLOAD & GENERATE VOICE-TO-TEXT
+# 4. PANEL UPLOAD & BACA SUARA ASLI DENGAN GEMINI FILE API
 with st.container():
-    st.markdown("#### 📥 STEP 1: Upload Video & Ekstrak Suara ke Teks")
+    st.markdown("#### 📥 STEP 1: Upload Video & Analisis Suara Asli")
     uploaded_file = st.file_uploader("Upload File Video (MP4, MKV, MOV)", type=["mp4", "mkv", "mov"])
     
     language_style = st.selectbox("Gaya Bahasa Transkrip", [
@@ -86,72 +90,118 @@ with st.container():
         "English (Standard)"
     ])
 
-    if st.button("🎙️ Generate Voice-to-Text dari Suara Video", use_container_width=True):
+    if st.button("🎙️ Proses Baca Suara Asli Video dengan AI", use_container_width=True):
         if not api_key:
             st.error("Masukkan API Key terlebih dahulu di menu samping!")
         elif not uploaded_file:
             st.error("Silakan upload file video terlebih dahulu!")
         else:
-            # Simpan video upload ke file lokal sementara
             temp_video_path = "source_video_input.mp4"
             with open(temp_video_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             st.session_state.temp_video_path = temp_video_path
 
-            with st.spinner("AI sedang mendengarkan audio video dan merubahnya menjadi teks..."):
+            with st.spinner("Mengunggah video ke peladen AI & mendengarkan suara asli... Mohon tunggu"):
                 try:
-                    model = genai.GenerativeModel('gemini-3.6-flash')
+                    # Mengunggah file video asli agar AI bisa membaca audionya
+                    video_file = genai.upload_file(path=temp_video_path)
                     
-                    # Menggunakan Gemini untuk membuat transkrip teks simulasi / ekstraksi audio
-                    prompt = f"""
-                    Bertindaklah sebagai AI Speech-to-Text profesional. Buat transkrip teks narasi percakapan lengkap yang sangat natural dan akurat dari sebuah video dengan gaya bahasa: '{language_style}'.
-                    Berikan hasil transkrip kalimat demi kalimat yang mengalir dari awal sampai akhir video.
-                    Output HARUS berupa teks transkrip murni tanpa tambahan format markdown atau prolog.
-                    """
-                    response = model.generate_content(prompt)
-                    st.session_state.transcript_text = response.text.strip()
-                    st.success("Berhasil mengekstrak suara menjadi teks!")
-                except Exception as e:
-                    st.error(f"Gagal memproses suara. Error: {e}")
+                    while video_file.state.name == "PROCESSING":
+                        time.sleep(2)
+                        video_file = genai.get_file(video_file.name)
+                        
+                    if video_file.state.name == "FAILED":
+                        raise ValueError("Gagal memproses file video di server AI.")
 
-# 5. STUDIO EDITOR TEKS & PEMBAKARAN SUBTITLE (BURN SUBTITLES)
+                    model = genai.GenerativeModel('gemini-3.6-flash')
+                    prompt = f"""
+                    Dengarkan audio/suara dari video yang di-upload ini dengan seksama. 
+                    Buat transkrip teks percakapan/suara asli secara akurat kalimat demi kalimat sesuai dengan isi video tersebut, dengan gaya bahasa: '{language_style}'.
+                    Output HARUS berupa teks transkrip murni tanpa prolog atau markdown tambahan.
+                    """
+                    
+                    response = model.generate_content([video_file, prompt])
+                    st.session_state.transcript_text = response.text.strip()
+                    
+                    # Bersihkan file dari peladen AI setelah selesai
+                    genai.delete_file(video_file.name)
+                    
+                    st.success("Suara asli video berhasil dibaca dan ditranskrip oleh AI!")
+                except Exception as e:
+                    st.error(f"Gagal membaca suara video. Error: {e}")
+
+# 5. STUDIO EDITOR TEKS & KUSTOMISASI TAMPILAN SUBTITLE
 if st.session_state.transcript_text and "temp_video_path" in st.session_state:
-    st.markdown("<br>#### 🎬 STEP 2: Edit Teks & Bakar Subtitle ke Video", unsafe_allow_html=True)
+    st.markdown("<br>#### 🎬 STEP 2: Kustomisasi Teks & Pembakaran Subtitle", unsafe_allow_html=True)
     
-    st.info("Anda dapat mengoreksi atau menyunting teks hasil ekstraksi suara di bawah ini sebelum nantinya permanen tercetak di dalam video.")
-    
-    # Editor Teks Transkrip
+    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+    with col_c1:
+        font_choice = st.selectbox("🔤 Gaya Teks (Font)", ["Arial", "Impact", "Verdana", "Courier New"])
+    with col_c2:
+        size_choice = st.slider("📏 Ukuran Teks", min_value=16, max_value=48, value=24, step=2)
+    with col_c3:
+        color_choice = st.selectbox("🎨 Warna Teks", [
+            "Kuning (Khas Reels/TikTok)", 
+            "Putih Bersih", 
+            "Hijau Terang", 
+            "Merah Menyala"
+        ])
+    with col_c4:
+        pos_choice = st.selectbox("📍 Posisi Teks", [
+            "Bawah (Default)", 
+            "Tengah Layar", 
+            "Atas Layar"
+        ])
+
+    color_map = {
+        "Kuning (Khas Reels/TikTok)": "&H00FFFF&",
+        "Putih Bersih": "&HFFFFFF&",
+        "Hijau Terang": "&H00FF00&",
+        "Merah Menyala": "&H0000FF&"
+    }
+    selected_color_code = color_map.get(color_choice, "&H00FFFF&")
+
+    align_map = {
+        "Bawah (Default)": 2,
+        "Tengah Layar": 5,
+        "Atas Layar": 8
+    }
+    selected_alignment = align_map.get(pos_choice, 2)
+
     edited_transcript = st.text_area(
-        "📝 Editor Teks Transkrip (Voice-to-Text):", 
+        "📝 Editor Hasil Baca Suara (Voice-to-Text):", 
         value=st.session_state.transcript_text, 
-        height=200
+        height=180
     )
     
     output_final_video = "video_final_with_subtitles.mp4"
     
     col_b1, col_b2 = st.columns(2)
     with col_b1:
-        if st.button("🔥 Proses Bakar Teks ke Dalam Video (Burn Subtitles)", use_container_width=True):
-            with st.spinner("Mesin sedang merender video dan menanamkan teks secara permanen... Mohon tunggu sebentar."):
+        if st.button("🔥 Proses Bakar Teks ke Dalam Video", use_container_width=True):
+            with st.spinner("Mesin sedang merender video dengan subtitle kustom..."):
                 success = burn_subtitles_to_video(
                     st.session_state.temp_video_path, 
                     edited_transcript, 
-                    output_final_video
+                    output_final_video,
+                    font_name=font_choice,
+                    font_size=size_choice,
+                    color_code=selected_color_code,
+                    alignment_val=selected_alignment
                 )
                 if success and os.path.exists(output_final_video):
                     st.session_state.video_processed = True
-                    st.success("Berhasil! Teks berhasil ditanamkan ke dalam video.")
+                    st.success("Berhasil! Subtitle suara asli telah ditanamkan secara permanen.")
                 else:
-                    st.error("Gagal merender video dengan subtitle. Periksa kembali file video Anda.")
+                    st.error("Gagal merender video.")
 
-    # Tombol Download Jika Video Sudah Selesai Dirender
     if st.session_state.video_processed and os.path.exists(output_final_video):
         with col_b2:
             with open(output_final_video, "rb") as f:
                 st.download_button(
                     label="📥 Download Video Berisi Subtitle (MP4)",
                     data=f,
-                    file_name="NoahPadlan_Captioned_Video.mp4",
+                    file_name="NoahPadlan_RealAudio_Captioned.mp4",
                     mime="video/mp4",
                     use_container_width=True,
                     type="primary"
