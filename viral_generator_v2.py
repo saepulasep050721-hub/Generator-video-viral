@@ -4,6 +4,7 @@ import json
 import subprocess
 import yt_dlp
 import os
+import re
 
 # 1. Konfigurasi Halaman Dasar
 st.set_page_config(page_title="Noah Padlan Clipper", page_icon="✂️", layout="wide")
@@ -47,7 +48,7 @@ api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password"
 if api_key:
     genai.configure(api_key=api_key)
 
-# 3. FUNGSI PEMOTONG VIDEO DENGAN PENANGANAN WAKTU AMAN
+# 3. FUNGSI PEMOTONG VIDEO DENGAN PARSER WAKTU SUPER AMAN
 def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
@@ -63,26 +64,36 @@ def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
             formats = info.get('formats', [info])
             stream_url = formats[-1]['url']
 
-    def time_to_seconds(t_str):
-        parts = str(t_str).strip().split(':')
-        if len(parts) == 3:
-            return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
-        elif len(parts) == 2:
-            return int(parts[0]) * 60 + float(parts[1])
+    def parse_to_seconds(time_str):
+        if not time_str:
+            return 0.0
+        # Bersihkan string dari karakter non-standar
+        clean_str = str(time_str).strip()
+        parts = clean_str.split(':')
         try:
-            return float(t_str)
+            if len(parts) == 3:
+                return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+            elif len(parts) == 2:
+                return float(parts[0]) * 60 + float(parts[1])
+            else:
+                return float(clean_str)
         except:
-            return 10.0
+            # Fallback ekstraksi angka jika format berantakan
+            numbers = re.findall(r'\d+', clean_str)
+            if len(numbers) >= 3:
+                return float(numbers[0]) * 3600 + float(numbers[1]) * 60 + float(numbers[2])
+            elif len(numbers) == 2:
+                return float(numbers[0]) * 60 + float(numbers[1])
+            elif len(numbers) == 1:
+                return float(numbers[0])
+            return 0.0
 
-    try:
-        start_sec = time_to_seconds(start_time)
-        end_sec = time_to_seconds(end_time)
-        duration = end_sec - start_sec
-        if duration <= 0:
-            duration = 30
-    except:
-        start_sec = 10
-        duration = 30
+    start_sec = parse_to_seconds(start_time)
+    end_sec = parse_to_seconds(end_time)
+    duration = end_sec - start_sec
+
+    if duration <= 0:
+        duration = 30.0 # Default durasi aman
 
     crop_filter = f"crop=ih*9/16:ih:(iw-ih*9/16)*{pan_percent}/100:0"
     
@@ -123,9 +134,9 @@ with st.container():
                     [
                         {{
                             "id_klip": 1,
-                            "waktu_mulai": "00:01:15",
-                            "waktu_selesai": "00:02:00",
-                            "judul_klip": "Reaksi Kaget",
+                            "waktu_mulai": "00:00:45",
+                            "waktu_selesai": "00:01:45",
+                            "judul_klip": "Pengakuan Mengejutkan",
                             "skor_viral": "9.8/10",
                             "voice_to_text": "Transkrip teks suara..."
                         }}
@@ -196,5 +207,5 @@ if st.session_state.clips_data:
                                 st.success("Berhasil! Halaman akan dimuat ulang untuk menampilkan tombol Download.")
                                 st.rerun()
                             else:
-                                st.error("Gagal memotong video. Pastikan format waktu valid.")
+                                st.error("Gagal memotong video. Periksa kembali jaringan atau link YouTube.")
             st.divider()
