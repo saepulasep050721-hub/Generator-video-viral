@@ -47,9 +47,8 @@ api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password"
 if api_key:
     genai.configure(api_key=api_key)
 
-# 3. FUNGSI PEMOTONG VIDEO DENGAN FORMAT AMAN
+# 3. FUNGSI PEMOTONG VIDEO DENGAN PENANGANAN WAKTU AMAN
 def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
-    # Menggunakan format universal 'best' dengan fallback agar tidak error
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'noplaylist': True,
@@ -58,22 +57,39 @@ def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        # Ambil URL stream terbaik yang tersedia
         if 'url' in info:
             stream_url = info['url']
         else:
             formats = info.get('formats', [info])
             stream_url = formats[-1]['url']
 
-    # Rumus Crop 9:16 dan posisi Pan (Kiri-Kanan)
+    # Konversi format waktu HH:MM:SS ke total detik agar aman dibaca FFmpeg
+    def time_to_seconds(t_str):
+        parts = t_str.strip().split(':')
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        elif len(parts) == 2:
+            return int(parts[0]) * 60 + float(parts[1])
+        return float(t_str)
+
+    try:
+        start_sec = time_to_seconds(start_time)
+        end_sec = time_to_seconds(end_time)
+        duration = end_sec - start_sec
+        if duration <= 0:
+            duration = 30 # Default aman jika durasi tidak valid
+    except:
+        start_sec = 10
+        duration = 30
+
     crop_filter = f"crop=ih*9/16:ih:(iw-ih*9/16)*{pan_percent}/100:0"
     
-    # Perintah FFmpeg untuk memotong video
+    # Menggunakan -ss dengan durasi (-t) agar lebih stabil di server cloud
     command = [
         'ffmpeg', '-y', 
-        '-ss', start_time, 
-        '-to', end_time, 
+        '-ss', str(start_sec), 
         '-i', stream_url, 
+        '-t', str(duration),
         '-vf', crop_filter, 
         '-c:a', 'aac', 
         output_filename
@@ -106,78 +122,15 @@ with st.container():
                     [
                         {{
                             "id_klip": 1,
-                            "waktu_mulai": "00:00:10",
-                            "waktu_selesai": "00:00:40",
-                            "judul_klip": "Momen Seru",
+                            "waktu_mulai": "00:01:15",
+                            "waktu_selesai": "00:02:00",
+                            "judul_klip": "Reaksi Kaget",
                             "skor_viral": "9.8/10",
-                            "voice_to_text": "Waduh, giliran gue nih yang makan!..."
+                            "voice_to_text": "Transkrip teks suara..."
                         }}
                     ]
                     """
                     response = model.generate_content(prompt)
                     text_res = response.text.strip()
                     if text_res.startswith("```json"): text_res = text_res[7:]
-                    if text_res.endswith("```"): text_res = text_res[:-3]
-                    
-                    # Parsing JSON aman
-                    start_idx = text_res.find('[')
-                    end_idx = text_res.rfind(']') + 1
-                    clean_json = text_res[start_idx:end_idx]
-                    
-                    st.session_state.clips_data = json.loads(clean_json)
-                    st.success("Analisis selesai! Silakan gulir ke bawah untuk memproses dan mengunduh MP4.")
-                except Exception as e:
-                    st.error(f"Error AI: {e}")
-
-# 5. STUDIO RENDER & DOWNLOAD SUNGGUHAN
-if st.session_state.clips_data:
-    st.markdown("<br>#### 🎬 STEP 2: Studio Render & Download", unsafe_allow_html=True)
-
-    for idx, clip in enumerate(st.session_state.clips_data):
-        with st.container():
-            st.markdown(f"<div class='clip-card'><b>Klip #{clip['id_klip']} ({clip['waktu_mulai']} - {clip['waktu_selesai']}) | 🔥 Skor: {clip['skor_viral']}</b><br>{clip['judul_klip']}</div>", unsafe_allow_html=True)
-            
-            c_prev, c_edit = st.columns([1, 1.2])
-            
-            with c_prev:
-                st.markdown("**📱 Pratinjau 9:16 (Bebas Teks)**")
-                st.markdown(f"""
-                    <div class="phone-mockup">
-                        <div style="position: absolute; top: 15px; font-size: 11px; background: rgba(0,0,0,0.6); padding: 3px 8px; border-radius: 10px;">
-                            9:16 Vertical View
-                        </div>
-                        <div style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: auto; margin-bottom: auto;">
-                            Video akan bersih<br>tanpa teks apa pun
-                        </div>
-                        <div style="position: absolute; bottom: 15px; font-size: 10px; color: #94a3b8;">
-                            Durasi: {clip['waktu_mulai']} - {clip['waktu_selesai']}
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-            with c_edit:
-                pan_position = st.slider(f"↔️ Geser Posisi Bingkai 9:16 (0=Kiri, 50=Tengah, 100=Kanan) [Klip {clip['id_klip']}]", 0, 100, 50, key=f"pan_{idx}")
-                st.text_area("🎙️ Voice-to-Text (Transkrip Kasar):", clip.get('voice_to_text', ''), height=100, key=f"txt_{idx}")
-                
-                output_file = f"hasil_klip_{clip['id_klip']}.mp4"
-                
-                if os.path.exists(output_file):
-                    with open(output_file, "rb") as f:
-                        st.download_button(
-                            label=f"📥 Download MP4 Bersih (Klip #{clip['id_klip']})",
-                            data=f,
-                            file_name=output_file,
-                            mime="video/mp4",
-                            key=f"dl_btn_{idx}",
-                            type="primary"
-                        )
-                else:
-                    if st.button(f"⚙️ Mulai Proses Potong MP4 (Klip #{clip['id_klip']})", key=f"render_{idx}", use_container_width=True):
-                        with st.spinner(f"Mesin sedang menarik video dan merender format 9:16... Mohon tunggu sebentar."):
-                            render_video_clip(youtube_url, clip['waktu_mulai'], clip['waktu_selesai'], pan_position, output_file)
-                            if os.path.exists(output_file):
-                                st.success("Berhasil! Halaman akan dimuat ulang untuk menampilkan tombol Download.")
-                                st.rerun()
-                            else:
-                                st.error("Gagal memotong video. Periksa kembali format waktu mulai dan selesai dari AI.")
-            st.divider()
+                    if text_res.endswith("
