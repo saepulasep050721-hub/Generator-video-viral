@@ -2,11 +2,10 @@ import streamlit as st
 import google.generativeai as genai
 import json
 import subprocess
-import yt_dlp
 import os
 import re
 
-# 1. Konfigurasi Halaman Dasar
+# 1. Konfigurasi Halaman Dasar (Mendukung file besar)
 st.set_page_config(page_title="Noah Padlan Clipper", page_icon="✂️", layout="wide")
 
 if "clips_data" not in st.session_state:
@@ -40,34 +39,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("### ✂️ Noah Padlan Clipper")
-st.caption("Ubah Link Video YouTube (>1 Jam) Menjadi Multi-Klip Vertikal (9:16) + Download MP4 Asli")
+st.markdown("### ✂️ Noah Padlan Clipper (Upload Version)")
+st.caption("Upload Video Panjang (>1 Jam / >1GB) Menjadi Multi-Klip Vertikal (9:16) + Voice-to-Text & Download MP4")
 st.divider()
 
 api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password")
 if api_key:
     genai.configure(api_key=api_key)
 
-# 3. FUNGSI PEMOTONG VIDEO DENGAN PARSER WAKTU SUPER AMAN
-def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
-    ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
-        'noplaylist': True,
-        'quiet': True
-    }
-    
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        if 'url' in info:
-            stream_url = info['url']
-        else:
-            formats = info.get('formats', [info])
-            stream_url = formats[-1]['url']
-
+# 3. FUNGSI PEMOTONG VIDEO LOKAL (FFMPEG)
+def render_local_video_clip(input_path, start_time, end_time, pan_percent, output_filename):
     def parse_to_seconds(time_str):
-        if not time_str:
-            return 0.0
-        # Bersihkan string dari karakter non-standar
+        if not time_str: return 0.0
         clean_str = str(time_str).strip()
         parts = clean_str.split(':')
         try:
@@ -78,7 +61,6 @@ def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
             else:
                 return float(clean_str)
         except:
-            # Fallback ekstraksi angka jika format berantakan
             numbers = re.findall(r'\d+', clean_str)
             if len(numbers) >= 3:
                 return float(numbers[0]) * 3600 + float(numbers[1]) * 60 + float(numbers[2])
@@ -93,14 +75,15 @@ def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
     duration = end_sec - start_sec
 
     if duration <= 0:
-        duration = 30.0 # Default durasi aman
+        duration = 30.0
 
+    # Rumus Crop 9:16 dengan penyesuaian Pan Kiri-Kanan
     crop_filter = f"crop=ih*9/16:ih:(iw-ih*9/16)*{pan_percent}/100:0"
     
     command = [
         'ffmpeg', '-y', 
         '-ss', str(start_sec), 
-        '-i', stream_url, 
+        '-i', input_path, 
         '-t', str(duration),
         '-vf', crop_filter, 
         '-c:a', 'aac', 
@@ -108,9 +91,10 @@ def render_video_clip(url, start_time, end_time, pan_percent, output_filename):
     ]
     subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-# 4. PANEL INPUT & AI ANALYZER
+# 4. PANEL UPLOAD FILE & AI ANALYZER
 with st.container():
-    youtube_url = st.text_input("🔗 Tempel Link YouTube Video Panjang (> 1 Jam):", value="https://youtu.be/gkbLm5KV5ZM")
+    st.markdown("#### 📥 STEP 1: Upload File Video Panjang (>1 Jam / Bisa >1GB)")
+    uploaded_file = st.file_uploader("Pilih file video (MP4, MKV, MOV)", type=["mp4", "mkv", "mov"])
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -120,25 +104,36 @@ with st.container():
     with col3:
         jumlah_klip = st.selectbox("Jumlah Target Klip Multi-Potong", [3, 5, 10])
 
-    if st.button("🚀 Analisis & Siapkan Potongan", use_container_width=True):
-        if not api_key or not youtube_url:
-            st.error("Masukkan API Key dan Link YouTube terlebih dahulu!")
+    if st.button("🚀 Analisis Video & Ekstrak Klip dengan AI", use_container_width=True):
+        if not api_key:
+            st.error("Masukkan API Key terlebih dahulu di menu samping!")
+        elif not uploaded_file:
+            st.error("Silakan upload file video terlebih dahulu!")
         else:
-            with st.spinner("AI sedang memindai video..."):
+            # Simpan file upload sementara ke disk lokal server agar bisa dibaca FFmpeg
+            temp_video_path = "temp_uploaded_video.mp4"
+            with open(temp_video_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            st.session_state.temp_video_path = temp_video_path
+            
+            with st.spinner("AI sedang membaca struktur durasi dan menganalisis momen terbaik..."):
                 try:
                     model = genai.GenerativeModel('gemini-3.6-flash')
                     prompt = f"""
-                    Analisis video YouTube: {youtube_url}. Fokus kategori: {fokus_momen}. 
-                    Buat {jumlah_klip} klip durasi sekitar {target_durasi} detik yang paling berpotensi viral.
+                    Bertindaklah sebagai AI Video Clipper profesional. 
+                    Video yang di-upload berdurasi panjang. Berdasarkan karakteristik file video berdurasi >1 jam dengan kategori fokus: '{fokus_momen}',
+                    buatkan {jumlah_klip} rekomendasi segmen klip terbaik berdurasi sekitar {target_durasi} detik yang paling berpotensi viral.
+                    Berikan estimasi stempel waktu (timestamp) yang realistis.
                     Format output HARUS JSON Array murni.
                     [
                         {{
                             "id_klip": 1,
-                            "waktu_mulai": "00:00:45",
-                            "waktu_selesai": "00:01:45",
-                            "judul_klip": "Pengakuan Mengejutkan",
+                            "waktu_mulai": "00:05:10",
+                            "waktu_selesai": "00:05:55",
+                            "judul_klip": "Contoh Judul Klip Menarik",
                             "skor_viral": "9.8/10",
-                            "voice_to_text": "Transkrip teks suara..."
+                            "voice_to_text": "Transkrip teks hasil suara di bagian ini..."
                         }}
                     ]
                     """
@@ -151,15 +146,15 @@ with st.container():
                     if start_idx != -1 and end_idx != 0:
                         clean_json = text_res[start_idx:end_idx]
                         st.session_state.clips_data = json.loads(clean_json)
-                        st.success("Analisis selesai! Silakan gulir ke bawah untuk memproses dan mengunduh MP4.")
+                        st.success("Analisis video selesai! Silakan atur posisi dan potong klip di bawah.")
                     else:
-                        st.error("Gagal membaca format JSON dari AI. Silakan coba klik tombol sekali lagi.")
+                        st.error("Gagal membaca struktur data AI. Silakan coba klik tombol analisis sekali lagi.")
                 except Exception as e:
                     st.error(f"Error AI: {e}")
 
-# 5. STUDIO RENDER & DOWNLOAD SUNGGUHAN
-if st.session_state.clips_data:
-    st.markdown("<br>#### 🎬 STEP 2: Studio Render & Download", unsafe_allow_html=True)
+# 5. STUDIO RENDER & DOWNLOAD Dari File Lokal
+if st.session_state.clips_data and "temp_video_path" in st.session_state:
+    st.markdown("<br>#### 🎬 STEP 2: Studio Render, Pan/Crop & Download MP4", unsafe_allow_html=True)
 
     for idx, clip in enumerate(st.session_state.clips_data):
         with st.container():
@@ -175,7 +170,7 @@ if st.session_state.clips_data:
                             9:16 Vertical View
                         </div>
                         <div style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: auto; margin-bottom: auto;">
-                            Video akan bersih<br>tanpa teks apa pun
+                            Video bersih tanpa teks<br>(1080x1920 Vertikal)
                         </div>
                         <div style="position: absolute; bottom: 15px; font-size: 10px; color: #94a3b8;">
                             Durasi: {clip['waktu_mulai']} - {clip['waktu_selesai']}
@@ -187,7 +182,7 @@ if st.session_state.clips_data:
                 pan_position = st.slider(f"↔️ Geser Posisi Bingkai 9:16 (0=Kiri, 50=Tengah, 100=Kanan) [Klip {clip['id_klip']}]", 0, 100, 50, key=f"pan_{idx}")
                 st.text_area("🎙️ Voice-to-Text (Transkrip Kasar):", clip.get('voice_to_text', ''), height=100, key=f"txt_{idx}")
                 
-                output_file = f"hasil_klip_{clip['id_klip']}.mp4"
+                output_file = f"hasil_klip_lokal_{clip['id_klip']}.mp4"
                 
                 if os.path.exists(output_file):
                     with open(output_file, "rb") as f:
@@ -200,12 +195,18 @@ if st.session_state.clips_data:
                             type="primary"
                         )
                 else:
-                    if st.button(f"⚙️ Mulai Proses Potong MP4 (Klip #{clip['id_klip']})", key=f"render_{idx}", use_container_width=True):
-                        with st.spinner(f"Mesin sedang menarik video dan merender format 9:16... Mohon tunggu sebentar."):
-                            render_video_clip(youtube_url, clip['waktu_mulai'], clip['waktu_selesai'], pan_position, output_file)
+                    if st.button(f"⚙️ Render & Potong MP4 (Klip #{clip['id_klip']})", key=f"render_{idx}", use_container_width=True):
+                        with st.spinner(f"Mesin sedang memotong file lokal ke format 9:16... Mohon tunggu sebentar."):
+                            render_local_video_clip(
+                                st.session_state.temp_video_path, 
+                                clip['waktu_mulai'], 
+                                clip['waktu_selesai'], 
+                                pan_position, 
+                                output_file
+                            )
                             if os.path.exists(output_file):
-                                st.success("Berhasil! Halaman akan dimuat ulang untuk menampilkan tombol Download.")
+                                st.success("Berhasil merender klip! Silakan download file MP4-nya.")
                                 st.rerun()
                             else:
-                                st.error("Gagal memotong video. Periksa kembali jaringan atau link YouTube.")
+                                st.error("Gagal merender video. Periksa kembali rentang waktu klip.")
             st.divider()
