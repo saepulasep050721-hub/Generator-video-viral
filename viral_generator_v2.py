@@ -49,7 +49,7 @@ if api_key:
 with st.container():
     st.markdown("#### 🔗 STEP 1: Masukkan Link YouTube & Kategori Fokus Skor AI")
     
-    youtube_url = st.text_input("🔗 Tempel Link YouTube Video Panjang (> 1 Jam):", placeholder="https://www.youtube.com/watch?v=...")
+    youtube_url = st.text_input("🔗 Tempel Link YouTube Video Panjang (> 1 Jam):", placeholder="[https://www.youtube.com/watch?v=](https://www.youtube.com/watch?v=)...")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -91,7 +91,7 @@ if analyze_button:
                 Analisis video YouTube dari tautan berikut: {youtube_url}. 
                 Fokuskan pencarian klip dan penilaian skor viral berdasarkan kategori momen: '{fokus_momen}'.
                 Buatkan {jumlah_klip} segmen klip terbaik berdurasi sekitar {target_durasi} detik yang paling berpotensi viral di TikTok/Shorts sesuai kategori tersebut.
-                Format output HARUS JSON Array murni tanpa teks lain:
+                Format output HARUS JSON Array murni tanpa teks lain, tanpa markdown block.
                 [
                     {{
                         "id_klip": 1,
@@ -106,4 +106,12 @@ if analyze_button:
                 ]
                 """
                 response = model.generate_content(prompt_clipper)
-                cleaned = response.text.replace("```json", "").replace("
+                # Pembersihan teks respons agar aman dari markdown
+                text_res = response.text.strip()
+                if text_res.startswith("```json"):
+                    text_res = text_res[7:]
+                if text_res.endswith("```"):
+                    text_res = text_res[:-3]
+                
+                st.session_state.clips_data = json.loads(text_res.strip())
+                st.success("Berhasil memindai klip
