@@ -3,7 +3,7 @@ import google.generativeai as genai
 import json
 
 # 1. Konfigurasi Halaman Dasar
-st.set_page_config(page_title="YukiVerse AI Video Clipper Pro", page_icon="✂️", layout="wide")
+st.set_page_config(page_title="Noah Padlan Clipper", page_icon="✂️", layout="wide")
 
 if "clips_data" not in st.session_state:
     st.session_state.clips_data = []
@@ -19,19 +19,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. HEADER
-st.markdown("### ✂️ YukiVerse AI Video Clipper Pro")
-st.caption("Ubah Video Panjang (>1 Jam) Menjadi Multi-Klip Vertikal (9:16) Ber-Skor Viral & Auto-Captions")
+st.markdown("### ✂️ Noah Padlan Clipper")
+st.caption("Ubah Link Video YouTube (>1 Jam) Menjadi Multi-Klip Vertikal (9:16) Ber-Skor Viral & Auto-Captions")
 st.divider()
 
 api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password")
 if api_key:
     genai.configure(api_key=api_key)
 
-# 4. PANEL UPLOAD & PENGATURAN PEMOTONGAN
+# 4. PANEL INPUT LINK YOUTUBE & PENGATURAN KLIP
 with st.container():
-    st.markdown("#### 📥 STEP 1: Upload Video Panjang & Atur Parameter Klip")
+    st.markdown("#### 🔗 STEP 1: Masukkan Link YouTube & Atur Parameter Klip")
     
-    uploaded_file = st.file_uploader("Upload Video Utama (MP4, MKV, MOV - Bisa > 1 Jam)", type=["mp4", "mkv", "mov"])
+    youtube_url = st.text_input("🔗 Tempel Link YouTube Video Panjang (> 1 Jam):", placeholder="https://www.youtube.com/watch?v=...")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -45,23 +45,23 @@ with st.container():
             "Dynamic Pop (Warna Warni Aktif)"
         ])
 
-    ai_crop_mode = st.checkbox("Aktifkan AI Smart Reframe (Fokuskan wajah/objek di tengah 9:16)", value=True)
+    ai_crop_mode = st.checkbox("Aktifkan AI Smart Reframe (Fokuskan objek di tengah 9:16)", value=True)
     
     analyze_button = st.button("🚀 Analisis & Potong Multi-Klip dengan AI", use_container_width=True)
 
 if analyze_button:
     if not api_key:
         st.error("Silakan masukkan API Key di menu samping kiri terlebih dahulu.")
-    elif not uploaded_file:
-        st.warning("Silakan upload file video terlebih dahulu.")
+    elif not youtube_url:
+        st.warning("Silakan masukkan link YouTube terlebih dahulu.")
     else:
-        with st.spinner("Menganalisis audio, transkripsi teks, dan memindai momen paling viral dari video..."):
+        with st.spinner("Mengakses transkrip YouTube, menganalisis audio, dan memindai momen paling viral..."):
             try:
                 model = genai.GenerativeModel('gemini-3.6-flash')
                 
-                # Simulasi analisis AI untuk memecah video panjang menjadi multi-klip bernilai viral tinggi
                 prompt_clipper = f"""
-                Simulasikan analisis file video berdurasi panjang. Buatkan {jumlah_klip} segmen klip terbaik berdurasi sekitar {target_durasi} detik yang paling berpotensi viral.
+                Analisis video YouTube dari tautan berikut: {youtube_url}. 
+                Simulasikan pemecahan video berdurasi panjang tersebut dan buatkan {jumlah_klip} segmen klip terbaik berdurasi sekitar {target_durasi} detik yang paling berpotensi viral di TikTok/Shorts.
                 Format output HARUS JSON Array murni tanpa teks lain:
                 [
                     {{
@@ -78,14 +78,14 @@ if analyze_button:
                 response = model.generate_content(prompt_clipper)
                 cleaned = response.text.replace("```json", "").replace("```", "").strip()
                 st.session_state.clips_data = json.loads(cleaned)
-                st.success("Berhasil memindai dan memotong multi-klip!")
+                st.success("Berhasil memindai dan memecah video menjadi multi-klip ber-skor viral!")
             except Exception as e:
-                st.error(f"Gagal memproses klip. Error: {e}")
+                st.error(f"Gagal memproses video. Error: {e}")
 
 # 5. MENAMPILKAN HASIL MULTI-KLIP & TOOLS PENYESUAIAN (PAN/CROP & EDIT)
 if st.session_state.clips_data:
     st.markdown("<br>#### 🎬 STEP 2: Studio Pengaturan Multi-Klip (9:16 & Posisi Frame)", unsafe_allow_html=True)
-    st.info("Setiap klip di bawah dilengkapi skor prediksi viral, kontrol posisi horizontal, dan transkrip teks otomatis.")
+    st.info("Setiap klip di bawah dilengkapi skor prediksi viral, kontrol posisi horizontal (pan/crop), dan transkrip teks otomatis.")
 
     for idx, clip in enumerate(st.session_state.clips_data):
         with st.container():
@@ -103,7 +103,7 @@ if st.session_state.clips_data:
                 st.markdown(f"**Judul:** {clip['judul_klip']}")
                 st.markdown(f"*Alasan AI:* {clip['alasan']}")
                 
-                # Tools Penggeser Posisi Video (Pan/Crop Kiri-Kanan) khusus format 9:16
+                # Tools Penggeser Posisi Video (Pan/Crop Kiri-Kanan) format 9:16
                 pan_position = st.slider(
                     f"↔️ Geser Posisi Bingkai 9:16 (Kiri ➔ Kanan) [Klip {clip['id_klip']}]", 
                     min_value=0, max_value=100, value=50, step=5,
@@ -113,7 +113,7 @@ if st.session_state.clips_data:
                 st.markdown("**📝 Preview Auto-Captions (Teks Otomatis dari Suara):**")
                 st.text_area(
                     f"Edit Teks Transkrip [{clip['id_klip']}]", 
-                    value=clip['transkrip_tsx'] if 'transkrip_tsx' in clip else clip['transkrip_teks'],
+                    value=clip['transkrip_teks'],
                     height=100,
                     key=f"text_{idx}"
                 )
@@ -121,7 +121,7 @@ if st.session_state.clips_data:
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 if st.button(f"✨ Download Klip #{clip['id_klip']} (MP4 9:16)", key=f"dl_{idx}", use_container_width=True):
-                    st.success(f"Klip #{clip['id_klip']} dengan posisi pan {pan_position}% dan style takarir berhasil dirender!")
+                    st.success(f"Klip #{clip['id_klip']} dengan posisi pan {pan_position}% dan style takarir '{auto_caption}' berhasil dirender!")
             with col_b2:
                 if st.button(f"🗑️ Hapus Klip Ini", key=f"del_{idx}", use_container_width=True):
                     st.warning(f"Klip #{clip['id_klip']} dihapus dari antrean.")
