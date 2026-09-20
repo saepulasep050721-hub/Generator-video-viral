@@ -12,7 +12,7 @@ if "transcript_text" not in st.session_state:
 if "video_processed" not in st.session_state:
     st.session_state.video_processed = False
 
-# 2. INJEKSI CSS TAMPILAN MODERN
+# 2. INJEKSI CSS TAMPILAN MODERN & PREVIEW KUSTOM
 st.markdown("""
     <style>
     .stApp { background-color: #f8fafc; }
@@ -22,15 +22,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("### ✍️ Noah Padlan Subtitle Burner Pro (Real Audio AI)")
-st.caption("Mendengarkan Suara Asli Video Menggunakan Gemini File API & Kustomisasi Subtitle Permanen")
+st.markdown("### ✍️ Noah Padlan Subtitle Burner Pro (Real Audio AI + Live Preview)")
+st.caption("Mendengarkan Suara Asli Video & Pratinjau Tampilan Subtitle Secara Langsung")
 st.divider()
 
 api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password")
 if api_key:
     genai.configure(api_key=api_key)
 
-# 3. FUNGSI PEMBAKARAN SUBTITLE DENGAN KUSTOMISASI GAYA FFMPEG
+# 3. FUNGSI PEMBAKARAN SUBTITLE FFMPEG
 def burn_subtitles_to_video(input_path, transcript_content, output_path, font_name, font_size, color_code, alignment_val):
     srt_path = "temp_subs.srt"
     
@@ -103,7 +103,6 @@ with st.container():
 
             with st.spinner("Mengunggah video ke peladen AI & mendengarkan suara asli... Mohon tunggu"):
                 try:
-                    # Mengunggah file video asli agar AI bisa membaca audionya
                     video_file = genai.upload_file(path=temp_video_path)
                     
                     while video_file.state.name == "PROCESSING":
@@ -123,22 +122,20 @@ with st.container():
                     response = model.generate_content([video_file, prompt])
                     st.session_state.transcript_text = response.text.strip()
                     
-                    # Bersihkan file dari peladen AI setelah selesai
                     genai.delete_file(video_file.name)
-                    
                     st.success("Suara asli video berhasil dibaca dan ditranskrip oleh AI!")
                 except Exception as e:
                     st.error(f"Gagal membaca suara video. Error: {e}")
 
-# 5. STUDIO EDITOR TEKS & KUSTOMISASI TAMPILAN SUBTITLE
+# 5. STUDIO EDITOR TEKS, KUSTOMISASI & LIVE PREVIEW
 if st.session_state.transcript_text and "temp_video_path" in st.session_state:
-    st.markdown("<br>#### 🎬 STEP 2: Kustomisasi Teks & Pembakaran Subtitle", unsafe_allow_html=True)
+    st.markdown("<br>#### 🎬 STEP 2: Kustomisasi Gaya Teks & Live Preview", unsafe_allow_html=True)
     
     col_c1, col_c2, col_c3, col_c4 = st.columns(4)
     with col_c1:
         font_choice = st.selectbox("🔤 Gaya Teks (Font)", ["Arial", "Impact", "Verdana", "Courier New"])
     with col_c2:
-        size_choice = st.slider("📏 Ukuran Teks", min_value=16, max_value=48, value=24, step=2)
+        size_choice = st.slider("📏 Ukuran Teks (Skala)", min_value=12, max_value=36, value=20, step=2)
     with col_c3:
         color_choice = st.selectbox("🎨 Warna Teks", [
             "Kuning (Khas Reels/TikTok)", 
@@ -153,25 +150,77 @@ if st.session_state.transcript_text and "temp_video_path" in st.session_state:
             "Atas Layar"
         ])
 
-    color_map = {
+    # Mapping warna untuk FFmpeg (ASS format) & CSS Preview
+    color_map_ffmpeg = {
         "Kuning (Khas Reels/TikTok)": "&H00FFFF&",
         "Putih Bersih": "&HFFFFFF&",
         "Hijau Terang": "&H00FF00&",
         "Merah Menyala": "&H0000FF&"
     }
-    selected_color_code = color_map.get(color_choice, "&H00FFFF&")
+    color_map_css = {
+        "Kuning (Khas Reels/TikTok)": "#00ffff",
+        "Putih Bersih": "#ffffff",
+        "Hijau Terang": "#00ff00",
+        "Merah Menyala": "#ff0000"
+    }
+    
+    selected_color_code = color_map_ffmpeg.get(color_choice, "&H00FFFF&")
+    css_color = color_map_css.get(color_choice, "#00ffff")
 
-    align_map = {
+    align_map_ffmpeg = {
         "Bawah (Default)": 2,
         "Tengah Layar": 5,
         "Atas Layar": 8
     }
-    selected_alignment = align_map.get(pos_choice, 2)
+    selected_alignment = align_map_ffmpeg.get(pos_choice, 2)
+
+    # Mapping CSS Flexbox untuk posisi pratinjau teks
+    css_flex_pos = {
+        "Bawah (Default)": "flex-end; padding-bottom: 25px;",
+        "Tengah Layar": "center;",
+        "Atas Layar": "flex-start; padding-top: 25px;"
+    }
+    selected_flex_pos = css_flex_pos.get(pos_choice, "flex-end; padding-bottom: 25px;")
+
+    # --- KOTAK PRATINJAU (LIVE PREVIEW CONTAINER) ---
+    st.markdown("**📱 Pratinjau Tampilan Subtitle pada Video (Live Preview):**")
+    
+    preview_html = f"""
+    <div style="
+        background: #0f172a; 
+        border: 6px solid #334155; 
+        border-radius: 16px; 
+        width: 100%; 
+        max-width: 320px; 
+        height: 220px; 
+        margin: 0 auto 20px auto; 
+        display: flex; 
+        flex-direction: column; 
+        justify-content: {selected_flex_pos}; 
+        align-items: center; 
+        text-align: center; 
+        padding: 10px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    ">
+        <span style="
+            font-family: '{font_choice}', sans-serif;
+            font-size: {size_choice}px;
+            color: {css_color};
+            font-weight: bold;
+            text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+            line-height: 1.2;
+        ">
+            Contoh Teks Subtitle Anda di Sini!
+        </span>
+    </div>
+    """
+    st.markdown(preview_html, unsafe_allow_html=True)
+    # ------------------------------------------------
 
     edited_transcript = st.text_area(
         "📝 Editor Hasil Baca Suara (Voice-to-Text):", 
         value=st.session_state.transcript_text, 
-        height=180
+        height=150
     )
     
     output_final_video = "video_final_with_subtitles.mp4"
@@ -185,7 +234,7 @@ if st.session_state.transcript_text and "temp_video_path" in st.session_state:
                     edited_transcript, 
                     output_final_video,
                     font_name=font_choice,
-                    font_size=size_choice,
+                    font_size=size_choice + 4, # Penyesuaian skala agar pas di video asli
                     color_code=selected_color_code,
                     alignment_val=selected_alignment
                 )
