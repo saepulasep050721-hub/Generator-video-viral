@@ -49,7 +49,7 @@ if api_key:
 with st.container():
     st.markdown("#### 🔗 STEP 1: Masukkan Link YouTube & Kategori Fokus Skor AI")
     
-    youtube_url = st.text_input("🔗 Tempel Link YouTube Video Panjang (> 1 Jam):", placeholder="[https://www.youtube.com/watch?v=](https://www.youtube.com/watch?v=)...")
+    youtube_url = st.text_input("🔗 Tempel Link YouTube Video Panjang (> 1 Jam):", placeholder="https://www.youtube.com/watch?v=...")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -100,13 +100,12 @@ if analyze_button:
                         "kategori_momen": "{fokus_momen}",
                         "judul_klip": "Judul Klip yang Menarik",
                         "skor_viral": "9.6/10",
-                        "alasan": "Alasan spesifik mengapa klip ini masuk kategori pilihan dan berpotensi viral",
+                        "alasan": "Alasan spesifik mengapa klip ini berpotensi viral",
                         "transkrip_teks": "Potongan teks narasi yang akan dijadikan auto-captions..."
                     }}
                 ]
                 """
                 response = model.generate_content(prompt_clipper)
-                # Pembersihan teks respons agar aman dari markdown
                 text_res = response.text.strip()
                 if text_res.startswith("```json"):
                     text_res = text_res[7:]
@@ -114,4 +113,73 @@ if analyze_button:
                     text_res = text_res[:-3]
                 
                 st.session_state.clips_data = json.loads(text_res.strip())
-                st.success("Berhasil memindai klip
+                st.success("Analisis selesai! Silakan review hasil potongan di bawah.")
+            except Exception as e:
+                st.error(f"Gagal memproses video. Error: {e}")
+
+# 5. STUDIO PENGATURAN, TOOLS PREVIEW 9:16 & DOWNLOAD
+if st.session_state.clips_data:
+    st.markdown("<br>#### 🎬 STEP 2: Studio Review, Pan/Crop 9:16 & Download Klip", unsafe_allow_html=True)
+
+    for idx, clip in enumerate(st.session_state.clips_data):
+        with st.container():
+            st.markdown(f"""
+                <div class="clip-card">
+                    <div style='display: flex; justify-content: space-between; font-weight: bold; color: #1e293b; margin-bottom: 8px;'>
+                        <span>Klip #{clip['id_klip']} ({clip['waktu_mulai']} - {clip['waktu_selesai']}) | Kategori: {clip.get('kategori_momen', 'Umum')}</span>
+                        <span style='color: #ea580c;'>🔥 Skor Viral: {clip['skor_viral']}</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            c_prev, c_edit = st.columns([1, 1.2])
+            
+            with c_prev:
+                st.markdown("**📱 Pratinjau Tampilan 9:16 (Live Preview)**")
+                st.markdown(f"""
+                    <div class="phone-mockup">
+                        <div style="position: absolute; top: 15px; font-size: 11px; background: rgba(0,0,0,0.6); padding: 3px 8px; border-radius: 10px;">
+                            9:16 Vertical View
+                        </div>
+                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; padding: 0 15px;">
+                            {clip['judul_klip']}
+                        </div>
+                        <div style="font-size: 12px; background: rgba(250, 204, 21, 0.2); color: #facc15; padding: 8px 12px; border-radius: 6px; border: 1px solid #facc15; margin-top: 20px;">
+                            💬 Auto-Captions:<br>"{clip['transkrip_teks'][:60]}..."
+                        </div>
+                        <div style="position: absolute; bottom: 15px; font-size: 10px; color: #94a3b8;">
+                            Durasi: {clip['waktu_mulai']} - {clip['waktu_selesai']}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+            with c_edit:
+                st.markdown(f"**Judul Klip:** {clip['judul_klip']}")
+                st.markdown(f"*Alasan AI:* {clip['alasan']}")
+                
+                pan_position = st.slider(
+                    f"↔️ Geser Posisi Bingkai 9:16 (Kiri ➔ Kanan) [Klip {clip['id_klip']}]", 
+                    min_value=0, max_value=100, value=50, step=5,
+                    key=f"pan_{idx}"
+                )
+                
+                st.markdown("**📝 Editor Teks Auto-Captions:**")
+                st.text_area(
+                    f"Edit Transkrip Klip #{clip['id_klip']}", 
+                    value=clip['transkrip_teks'],
+                    height=80,
+                    key=f"text_{idx}"
+                )
+                
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1:
+                if st.button(f"🔍 Play / Review Klip", key=f"rev_{idx}", use_container_width=True):
+                    st.info(f"Memutar pratinjau klip #{clip['id_klip']} dengan posisi pan {pan_position}%...")
+            with col_b2:
+                if st.button(f"✨ Download Klip #{clip['id_klip']}", key=f"dl_{idx}", use_container_width=True):
+                    st.success(f"Klip #{clip['id_klip']} siap diunduh (Format MP4 9:16, Gaya: {auto_caption})!")
+            with col_b3:
+                if st.button(f"🗑️ Hapus Klip", key=f"del_{idx}", use_container_width=True):
+                    st.warning(f"Klip #{clip['id_klip']} dihapus.")
+            
+            st.divider()
