@@ -67,49 +67,42 @@ with st.container():
         else:
             with st.spinner(f"AI sedang menscan isi video untuk mencari {jumlah_klip} momen '{fokus_momen}'..."):
                 try:
-                    # SOLUSI OTOMATIS: Cari model yang tersedia di API Key Anda untuk mencegah Error 404
-                    available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                    # KUNCI PERBAIKAN: Langsung kunci model ke versi 3.6-flash yang direkomendasikan server
+                    model = genai.GenerativeModel('gemini-3.6-flash')
                     
-                    if not available_models:
-                        st.error("Tidak ada model AI yang didukung oleh API Key ini.")
+                    prompt = f"""
+                    Analisis konten dari URL video YouTube ini: {youtube_url}
+                    Tugas Anda adalah mencari {jumlah_klip} momen spesifik yang masuk ke dalam kategori: '{fokus_momen}'.
+                    Untuk setiap momen, tentukan waktu mulai dan selesainya (durasi ideal 30-60 detik per klip).
+                    Berikan skor potensi viral dari 1 hingga 10.
+                    
+                    Format Output WAJIB menggunakan JSON Array murni tanpa penjelasan teks lainnya.
+                    Contoh format:
+                    [
+                        {{
+                            "id_klip": 1,
+                            "waktu_mulai": "00:05:10",
+                            "waktu_selesai": "00:06:00",
+                            "judul": "Judul momen yang clickbait dan menarik",
+                            "skor": "9.5/10",
+                            "alasan": "Penjelasan detail kenapa momen ini lucu/menarik/viral."
+                        }}
+                    ]
+                    """
+                    
+                    response = model.generate_content(prompt)
+                    text_res = response.text
+                    
+                    start_idx = text_res.find('[')
+                    end_idx = text_res.rfind(']') + 1
+                    
+                    if start_idx != -1 and end_idx != 0:
+                        clean_json = text_res[start_idx:end_idx]
+                        st.session_state.clips_data = json.loads(clean_json)
+                        st.session_state.yt_id = get_yt_id(youtube_url)
+                        st.success("Berhasil menemukan momen viral menggunakan model gemini-3.6-flash!")
                     else:
-                        # Pilih model 'flash' jika ada (lebih cepat), jika tidak pakai model pertama yang tersedia
-                        target_model_name = next((m for m in available_models if 'flash' in m), available_models[0])
-                        
-                        model = genai.GenerativeModel(target_model_name)
-                        prompt = f"""
-                        Analisis konten dari URL video YouTube ini: {youtube_url}
-                        Tugas Anda adalah mencari {jumlah_klip} momen spesifik yang masuk ke dalam kategori: '{fokus_momen}'.
-                        Untuk setiap momen, tentukan waktu mulai dan selesainya (durasi ideal 30-60 detik per klip).
-                        Berikan skor potensi viral dari 1 hingga 10.
-                        
-                        Format Output WAJIB menggunakan JSON Array murni tanpa penjelasan teks lainnya.
-                        Contoh format:
-                        [
-                            {{
-                                "id_klip": 1,
-                                "waktu_mulai": "00:05:10",
-                                "waktu_selesai": "00:06:00",
-                                "judul": "Judul momen yang clickbait dan menarik",
-                                "skor": "9.5/10",
-                                "alasan": "Penjelasan detail kenapa momen ini lucu/menarik/viral."
-                            }}
-                        ]
-                        """
-                        
-                        response = model.generate_content(prompt)
-                        text_res = response.text
-                        
-                        start_idx = text_res.find('[')
-                        end_idx = text_res.rfind(']') + 1
-                        
-                        if start_idx != -1 and end_idx != 0:
-                            clean_json = text_res[start_idx:end_idx]
-                            st.session_state.clips_data = json.loads(clean_json)
-                            st.session_state.yt_id = get_yt_id(youtube_url)
-                            st.success(f"Berhasil menemukan {len(st.session_state.clips_data)} momen viral menggunakan model {target_model_name.replace('models/', '')}!")
-                        else:
-                            st.error("Gagal membaca hasil analisis AI. Silakan klik tombol Scan lagi.")
+                        st.error("Gagal membaca hasil analisis AI. Silakan klik tombol Scan lagi.")
                 except Exception as e:
                     st.error(f"Terjadi kesalahan saat memproses URL: {e}")
 
