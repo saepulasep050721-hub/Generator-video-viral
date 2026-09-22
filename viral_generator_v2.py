@@ -29,13 +29,13 @@ api_key = st.sidebar.text_input("🔑 Masukkan Gemini API Key:", type="password"
 if api_key:
     genai.configure(api_key=api_key)
 
-# Fungsi Ekstrak ID YouTube (untuk membuat pemutar video klip)
+# Fungsi Ekstrak ID YouTube
 def get_yt_id(url):
     import re
     match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
     return match.group(1) if match else None
 
-# Fungsi Ubah format waktu HH:MM:SS ke Detik (untuk pemutar video)
+# Fungsi Ubah format waktu HH:MM:SS ke Detik
 def time_to_seconds(time_str):
     parts = str(time_str).strip().split(':')
     try:
@@ -59,7 +59,7 @@ with st.container():
             "🎲 Campur Semua Momen Viral"
         ])
     with col2:
-        jumlah_klip = st.number_input("Target Jumlah Klip (Minimal 10)", min_value=10, max_value=30, value=10)
+        jumlah_klip = st.number_input("Target Jumlah Klip (Minimal 10)", min_value=10, max_value=30, value=11)
 
     if st.button("🔍 Scan Momen Viral Sekarang!", use_container_width=True):
         if not api_key:
@@ -69,10 +69,10 @@ with st.container():
         else:
             with st.spinner(f"AI sedang menscan isi video untuk mencari {jumlah_klip} momen '{fokus_momen}'..."):
                 try:
-                    # Menggunakan model Gemini 1.5 Flash yang sangat cerdas menganalisis URL
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    # PERUBAHAN KUNCI: Menggunakan model 'gemini-pro' agar tidak muncul error 404
+                    model = genai.GenerativeModel('gemini-pro')
                     prompt = f"""
-                    Analisis konten dari video YouTube ini: {youtube_url}
+                    Analisis konten dari URL video YouTube ini: {youtube_url}
                     Tugas Anda adalah mencari {jumlah_klip} momen spesifik yang masuk ke dalam kategori: '{fokus_momen}'.
                     Untuk setiap momen, tentukan waktu mulai dan selesainya (durasi ideal 30-60 detik per klip).
                     Berikan skor potensi viral dari 1 hingga 10.
@@ -87,8 +87,7 @@ with st.container():
                             "judul": "Judul momen yang clickbait dan menarik",
                             "skor": "9.5/10",
                             "alasan": "Penjelasan detail kenapa momen ini lucu/menarik/viral."
-                        }},
-                        // ... lanjutkan sampai {jumlah_klip} klip
+                        }}
                     ]
                     """
                     
@@ -115,8 +114,8 @@ if st.session_state.clips_data and "yt_id" in st.session_state:
     st.info("Anda bisa langsung memutar setiap klip di bawah ini. AI telah mengatur agar video hanya memutar pada detik momen tersebut.")
 
     for clip in st.session_state.clips_data:
-        start_sec = time_to_seconds(clip['waktu_mulai'])
-        end_sec = time_to_seconds(clip['waktu_selesai'])
+        start_sec = time_to_seconds(clip.get('waktu_mulai', '0'))
+        end_sec = time_to_seconds(clip.get('waktu_selesai', '0'))
         
         with st.container():
             st.markdown(f"""
